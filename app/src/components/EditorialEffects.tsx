@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type MouseEvent, type ReactNode } from "react";
 import { AnimatePresence, motion, useMotionValue, useScroll, useSpring, useTransform, useVelocity } from "framer-motion";
-import Lenis from "lenis";
+import { readStored, writeStored } from "@/lib/utils";
 
 export function useMotionPreference() {
   const [reduced, setReduced] = useState(false);
@@ -18,10 +18,10 @@ export function Entrance() {
   const reduced = useMotionPreference();
   const [open, setOpen] = useState(false);
   useEffect(() => {
-    if (reduced || sessionStorage.getItem("mi-intro-seen")) return;
+    if (reduced || readStored("mi-intro-seen", false, "session")) return;
     setOpen(true);
     // Se marca como vista solo al cerrarse: si el efecto se repite, la cortina no se queda puesta
-    const timer = window.setTimeout(() => { setOpen(false); sessionStorage.setItem("mi-intro-seen", "1"); }, 950);
+    const timer = window.setTimeout(() => { setOpen(false); writeStored("mi-intro-seen", true, "session"); }, 650);
     return () => window.clearTimeout(timer);
   }, [reduced]);
   return <AnimatePresence>{open && <motion.div className="entrance-screen" initial={{ y: 0 }} animate={{ y: 0 }} exit={{ y: "-102%" }} transition={{ duration: .45, ease: [.64, 0, .24, 1] }} aria-hidden="true">
@@ -54,11 +54,17 @@ export function ScrollAtmosphere() {
   }, []);
   useEffect(() => {
     if (reduced || !window.matchMedia("(min-width: 901px) and (pointer: fine)").matches) return;
-    const lenis = new Lenis({ duration: 1.05, smoothWheel: true, anchors: { offset: -78 } });
+    // El desplazamiento suave solo se descarga en ordenador, así el móvil carga menos
     let frame = 0;
-    const raf = (time: number) => { lenis.raf(time); frame = requestAnimationFrame(raf); };
-    frame = requestAnimationFrame(raf);
-    return () => { cancelAnimationFrame(frame); lenis.destroy(); };
+    let lenis: { raf: (time: number) => void; destroy: () => void } | null = null;
+    let cancelled = false;
+    import("lenis").then(({ default: Lenis }) => {
+      if (cancelled) return;
+      lenis = new Lenis({ duration: 1.05, smoothWheel: true, anchors: { offset: -78 } });
+      const raf = (time: number) => { lenis?.raf(time); frame = requestAnimationFrame(raf); };
+      frame = requestAnimationFrame(raf);
+    }).catch(() => { /* sin desplazamiento suave */ });
+    return () => { cancelled = true; cancelAnimationFrame(frame); lenis?.destroy(); };
   }, [reduced]);
   useEffect(() => {
     document.documentElement.dataset["scrolled"] = scrolled ? "true" : "false";
@@ -157,7 +163,7 @@ export function HeroTitle({ lines = ["Mario", "Iglesias."], id = "hero-title", d
   const scale = useTransform(scrollYProgress, [0, 1], [1, .86]);
   const opacity = useTransform(scrollYProgress, [0, 1], [1, .2]);
   return <motion.h1 ref={ref} id={id} aria-label={lines.join(" ")} style={reduced ? {} : { scale, opacity }}>
-    {lines.map((line, lineIndex) => <span className="hero-title-line" key={line} aria-hidden="true"><span className={lineIndex ? "hero-line-indent" : ""}>{Array.from(line).map((character, index) => <span className="hero-letter-mask" key={`${lineIndex}-${index}`}><motion.span className={lineIndex ? "hero-italic" : ""} initial={reduced ? false : { y: "110%" }} animate={{ y: "0%" }} transition={{ delay: delay + lineIndex * .22 + index * .055, duration: .85, ease: [.2, .75, .2, 1] }}>{character === " " ? " " : character}</motion.span></span>)}</span></span>)}
+    {lines.map((line, lineIndex) => <span className="hero-title-line" key={line} aria-hidden="true"><span className={lineIndex ? "hero-line-indent" : ""}>{Array.from(line).map((character, index) => <span className="hero-letter-mask" key={`${lineIndex}-${index}`}><motion.span className={lineIndex ? "hero-italic" : ""} initial={reduced ? false : { y: "110%" }} animate={{ y: "0%" }} transition={{ delay: delay + lineIndex * .16 + index * .035, duration: .75, ease: [.2, .75, .2, 1] }}>{character === " " ? " " : character}</motion.span></span>)}</span></span>)}
   </motion.h1>;
 }
 

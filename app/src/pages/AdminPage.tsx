@@ -8,6 +8,7 @@ import { usePageTitle } from "@/components/SiteChrome";
 import { useToast } from "@/components/Toast";
 import { supabase } from "@/lib/supabase";
 import { ZONE, capitalize, formatDay } from "@/lib/appointments";
+import { onTabListKeyDown } from "@/lib/utils";
 
 /* =========================================================
    Acceso: email + contraseña de Supabase, solo para admins
@@ -175,15 +176,15 @@ function Dashboard({ email }: { email: string }) {
       <div><span className="eyebrow">ESTE MES</span><strong>{thisMonth}</strong></div>
     </div></Reveal>
 
-    <LayoutGroup id="admin-tabs"><div className="tab-bar" role="tablist" aria-label="Secciones del panel">
-      {TABS.map(t => <button key={t.id} role="tab" aria-selected={tab === t.id} onClick={() => setTab(t.id)}>
+    <LayoutGroup id="admin-tabs"><div className="tab-bar" role="tablist" aria-label="Secciones del panel" onKeyDown={onTabListKeyDown}>
+      {TABS.map(t => <button key={t.id} id={`pestana-${t.id}`} role="tab" aria-selected={tab === t.id} aria-controls="panel-pestana" tabIndex={tab === t.id ? 0 : -1} onClick={() => setTab(t.id)}>
         {t.label}{t.id === "citas" && pending > 0 && <span className="count-badge">{pending}</span>}
         {tab === t.id && <motion.span layoutId="admin-tab" className="tab-indicator" transition={{ type: "spring", stiffness: 400, damping: 36 }} />}
       </button>)}
     </div></LayoutGroup>
 
     <AnimatePresence mode="wait">
-      <motion.div key={tab} role="tabpanel" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -6 }} transition={{ duration: .3 }}>
+      <motion.div key={tab} id="panel-pestana" role="tabpanel" aria-labelledby={`pestana-${tab}`} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -6 }} transition={{ duration: .3 }}>
         {tab === "citas" && <BookingsTab bookings={bookings} setBookings={setBookings} />}
         {tab === "tareas" && <TasksTab />}
         {tab === "recordatorios" && <RemindersTab />}

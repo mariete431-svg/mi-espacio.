@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { Link } from "react-router-dom";
 import { AnimatePresence, motion } from "framer-motion";
 import { ArrowRight, ChevronLeft, ChevronRight, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -7,6 +8,7 @@ import { PageHero, SectionHeading, usePageTitle } from "@/components/SiteChrome"
 import { useToast } from "@/components/Toast";
 import { isAdminSession, publicClient, supabase } from "@/lib/supabase";
 import { capitalize, dayKey, formatDay } from "@/lib/appointments";
+import { readStored, writeStored } from "@/lib/utils";
 
 /* ---------- Calendario: mismos datos que el panel antiguo ---------- */
 const TAGS = [
@@ -28,7 +30,8 @@ const building = [
 ];
 
 function loadLocal(): DayMap {
-  try { return JSON.parse(localStorage.getItem(CAL_KEY) || "{}"); } catch { return {}; }
+  const saved = readStored<DayMap>(CAL_KEY, {});
+  return saved && typeof saved === "object" && !Array.isArray(saved) ? saved : {};
 }
 
 function Planner() {
@@ -59,7 +62,7 @@ function Planner() {
     return () => { active = false; };
   }, []);
 
-  useEffect(() => { if (!cloud) localStorage.setItem(CAL_KEY, JSON.stringify(data)); }, [data, cloud]);
+  useEffect(() => { if (!cloud) writeStored(CAL_KEY, data); }, [data, cloud]);
 
   const [y, m] = today.split("-").map(Number);
   const first = new Date(Date.UTC(y, m - 1 + offset, 1, 12));
@@ -117,7 +120,7 @@ function Planner() {
       </div></div>
       <AnimatePresence mode="wait" initial={false}>
         <motion.div key={`${year}-${month}`} className="calendar-grid" initial={{ opacity: 0, x: 12 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -12 }} transition={{ duration: .28 }}>
-          {weekdays.map(d => <span className="weekday" key={d}>{d}</span>)}
+          {weekdays.map(d => <span className="weekday" key={d} aria-hidden="true">{d}</span>)}
           {cells.map((date, i) => {
             if (!date) return <span key={`e${i}`} />;
             const d = data[date];
@@ -131,7 +134,8 @@ function Planner() {
           })}
         </motion.div>
       </AnimatePresence>
-      {cloud && <p className="sync-pill" style={{ marginTop: 22 }}><i /> SINCRONIZADO CON TU CUENTA</p>}
+      {cloud ? <p className="sync-pill" style={{ marginTop: 22 }}><i /> SINCRONIZADO CON TU CUENTA</p>
+        : <p className="form-note" style={{ marginTop: 22 }}>Lo que marques aquí se guarda solo en este navegador. Nadie más lo ve.</p>}
     </div>
 
     <div className="planner-day" aria-live="polite">
@@ -161,6 +165,8 @@ function Guestbook() {
   const [name, setName] = useState("");
   const [message, setMessage] = useState("");
   const [sending, setSending] = useState(false);
+  // Campo trampa contra robots (las personas no lo ven)
+  const [trap, setTrap] = useState("");
 
   const load = useCallback(async () => {
     const { data, error } = await publicClient.from("comments").select("id, name, message, created_at").order("created_at", { ascending: false });
@@ -173,10 +179,11 @@ function Guestbook() {
     event.preventDefault();
     const n = name.trim(), msg = message.trim();
     if (!n || !msg) return toast("Escribe tu nombre y tu comentario.", true);
+    if (trap) { setName(""); setMessage(""); return toast("¡Gracias por tu nota!"); }
     setSending(true);
     const { error } = await publicClient.from("comments").insert({ name: n.slice(0, 50), message: msg.slice(0, 500) });
     setSending(false);
-    if (error) return toast("No se ha podido publicar. Inténtalo de nuevo.", true);
+    if (error) return toast(error.message.includes("too_many") ? "Se han escrito muchos comentarios seguidos. Prueba dentro de unos minutos." : "No se ha podido publicar. Inténtalo de nuevo.", true);
     setName(""); setMessage("");
     toast("¡Gracias por tu nota!");
     load();
@@ -186,6 +193,8 @@ function Guestbook() {
     <Reveal><form className="booking-form" onSubmit={submit}>
       <div className="form-row"><label htmlFor="gb-name">Tu nombre</label><input id="gb-name" value={name} onChange={e => setName(e.target.value)} maxLength={50} placeholder="¿Cómo te llamas?" /></div>
       <div className="form-row"><label htmlFor="gb-msg">Comentario</label><textarea id="gb-msg" rows={5} value={message} onChange={e => setMessage(e.target.value)} maxLength={500} placeholder="Escribe algo…" /></div>
+      <div className="hp-field" aria-hidden="true"><label htmlFor="gb-website">No rellenes este campo</label><input id="gb-website" tabIndex={-1} autoComplete="off" value={trap} onChange={e => setTrap(e.target.value)} /></div>
+      <p className="form-note">Tu nombre y tu comentario se publicarán en esta web. Más información en la <Link to="/privacidad">política de privacidad</Link>.</p>
       <div className="form-actions"><small className="tasks-count" style={{ color: "var(--muted-foreground)" }}>{message.length}/500</small><Button type="submit" variant="luxury" disabled={sending}>{sending ? "Publicando…" : "Publicar comentario"} {!sending && <ArrowRight />}</Button></div>
     </form></Reveal>
     <div>

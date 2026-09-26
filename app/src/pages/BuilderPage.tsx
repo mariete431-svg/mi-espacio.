@@ -4,10 +4,11 @@ import { Download, Plus, RotateCcw, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Reveal } from "@/components/EditorialEffects";
 import { PageHero, SectionHeading, usePageTitle } from "@/components/SiteChrome";
+import { newId, readStored, writeStored } from "@/lib/utils";
 
 const DRAFT_KEY = "mario-crear-cv";
-type Education = { title: string; center: string; dates: string };
-type Job = { title: string; company: string; dates: string; desc: string };
+type Education = { id: string; title: string; center: string; dates: string };
+type Job = { id: string; title: string; company: string; dates: string; desc: string };
 type Draft = {
   name: string; role: string; email: string; phone: string; location: string; summary: string;
   education: Education[]; jobs: Job[]; skills: string; langs: string;
@@ -15,7 +16,14 @@ type Draft = {
 const empty: Draft = { name: "", role: "", email: "", phone: "", location: "", summary: "", education: [], jobs: [], skills: "", langs: "" };
 
 function loadDraft(): Draft {
-  try { return { ...empty, ...JSON.parse(localStorage.getItem(DRAFT_KEY) || "{}") }; } catch { return empty; }
+  const saved = readStored<Partial<Draft>>(DRAFT_KEY, {});
+  const draft = { ...empty, ...(saved && typeof saved === "object" ? saved : {}) };
+  // Los borradores antiguos no tenían identificador en cada entrada
+  return {
+    ...draft,
+    education: Array.isArray(draft.education) ? draft.education.map(e => ({ ...e, id: e.id ?? newId() })) : [],
+    jobs: Array.isArray(draft.jobs) ? draft.jobs.map(j => ({ ...j, id: j.id ?? newId() })) : [],
+  };
 }
 const list = (value: string) => value.split(",").map(s => s.trim()).filter(Boolean);
 
@@ -34,11 +42,11 @@ export default function BuilderPage() {
   const [cv, setCv] = useState<Draft>(loadDraft);
   const [photo, setPhoto] = useState<string | null>(null);
 
-  useEffect(() => { localStorage.setItem(DRAFT_KEY, JSON.stringify(cv)); }, [cv]);
+  useEffect(() => { writeStored(DRAFT_KEY, cv); }, [cv]);
 
   const set = <K extends keyof Draft>(key: K, value: Draft[K]) => setCv(prev => ({ ...prev, [key]: value }));
-  const setEdu = (i: number, key: keyof Education, value: string) => set("education", cv.education.map((e, j) => j === i ? { ...e, [key]: value } : e));
-  const setJob = (i: number, key: keyof Job, value: string) => set("jobs", cv.jobs.map((e, j) => j === i ? { ...e, [key]: value } : e));
+  const setEdu = (i: number, key: Exclude<keyof Education, "id">, value: string) => set("education", cv.education.map((e, j) => j === i ? { ...e, [key]: value } : e));
+  const setJob = (i: number, key: Exclude<keyof Job, "id">, value: string) => set("jobs", cv.jobs.map((e, j) => j === i ? { ...e, [key]: value } : e));
 
   const pickPhoto = (file?: File) => {
     if (!file || !file.type.startsWith("image/")) return;
@@ -64,7 +72,7 @@ export default function BuilderPage() {
     <PageHero
       eyebrow="PROYECTO 04 — HERRAMIENTA"
       lines={["Crea tu", "currículum."]}
-      subtitle="Rellena tus datos y verás tu CV tomar forma en directo. Cuando esté listo, descárgalo en PDF. Todo se genera en tu propio navegador — no se guarda ni se envía a ningún sitio."
+      subtitle="Rellena tus datos y verás tu CV tomar forma en directo. Cuando esté listo, guárdalo en PDF. Se guarda solo en tu propio navegador y no se envía a ningún sitio."
       bottomHref="#editor"
     />
 
@@ -96,7 +104,7 @@ export default function BuilderPage() {
 
           <Reveal><div className="builder-group">
             <h3>Formación</h3>
-            <AnimatePresence initial={false}>{cv.education.map((e, i) => <motion.div key={i} className="builder-entry" initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }}>
+            <AnimatePresence initial={false}>{cv.education.map((e, i) => <motion.div key={e.id} className="builder-entry" initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }}>
               <button type="button" className="icon-button" aria-label="Quitar formación" onClick={() => set("education", cv.education.filter((_, j) => j !== i))}><X /></button>
               <Field id={`edu-t-${i}`} label="Título / titulación" value={e.title} onChange={v => setEdu(i, "title", v)} placeholder="Ej: Grado en Diseño" />
               <div className="builder-two">
@@ -104,12 +112,12 @@ export default function BuilderPage() {
                 <Field id={`edu-d-${i}`} label="Fechas" value={e.dates} onChange={v => setEdu(i, "dates", v)} placeholder="2020 – 2024" />
               </div>
             </motion.div>)}</AnimatePresence>
-            <Button variant="outlineLuxury" onClick={() => set("education", [...cv.education, { title: "", center: "", dates: "" }])}><Plus /> Añadir formación</Button>
+            <Button variant="outlineLuxury" onClick={() => set("education", [...cv.education, { id: newId(), title: "", center: "", dates: "" }])}><Plus /> Añadir formación</Button>
           </div></Reveal>
 
           <Reveal><div className="builder-group">
             <h3>Experiencia</h3>
-            <AnimatePresence initial={false}>{cv.jobs.map((e, i) => <motion.div key={i} className="builder-entry" initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }}>
+            <AnimatePresence initial={false}>{cv.jobs.map((e, i) => <motion.div key={e.id} className="builder-entry" initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }}>
               <button type="button" className="icon-button" aria-label="Quitar experiencia" onClick={() => set("jobs", cv.jobs.filter((_, j) => j !== i))}><X /></button>
               <Field id={`job-t-${i}`} label="Puesto" value={e.title} onChange={v => setJob(i, "title", v)} placeholder="Ej: Auxiliar administrativo" />
               <div className="builder-two">
@@ -118,7 +126,7 @@ export default function BuilderPage() {
               </div>
               <Field id={`job-x-${i}`} label="Descripción breve" value={e.desc} onChange={v => setJob(i, "desc", v)} placeholder="Qué hacías en este puesto" />
             </motion.div>)}</AnimatePresence>
-            <Button variant="outlineLuxury" onClick={() => set("jobs", [...cv.jobs, { title: "", company: "", dates: "", desc: "" }])}><Plus /> Añadir experiencia</Button>
+            <Button variant="outlineLuxury" onClick={() => set("jobs", [...cv.jobs, { id: newId(), title: "", company: "", dates: "", desc: "" }])}><Plus /> Añadir experiencia</Button>
           </div></Reveal>
 
           <Reveal><div className="builder-group">
@@ -128,8 +136,9 @@ export default function BuilderPage() {
           </div></Reveal>
 
           <div className="builder-group hero-actions" style={{ marginTop: 0 }}>
-            <Button variant="luxury" size="lg" onClick={printPreview} data-cursor="PDF"><Download /> Descargar PDF</Button>
+            <Button variant="luxury" size="lg" onClick={printPreview} data-cursor="PDF"><Download /> Guardar como PDF</Button>
             <Button variant="outlineLuxury" size="lg" onClick={reset}><RotateCcw /> Empezar de cero</Button>
+            <p className="form-note" style={{ flexBasis: "100%" }}>Se abrirá la ventana de imprimir. En ordenador, elige «Guardar como PDF» como impresora. En iPhone, toca Compartir y luego «Guardar en Archivos».</p>
           </div>
         </div>
 
@@ -146,10 +155,10 @@ export default function BuilderPage() {
             </header>
             <div className="cv-paper-section"><h4>PERFIL</h4><p>{cv.summary || <span className="placeholder">Escribe tu resumen para verlo aquí.</span>}</p></div>
             <div className="cv-paper-section"><h4>EXPERIENCIA</h4>{cv.jobs.length
-              ? cv.jobs.map((j, i) => <div className="cv-paper-item" key={i}><strong>{j.title || "Puesto"}</strong><span>{[j.company, j.dates].filter(Boolean).join(" · ")}</span>{j.desc && <p>{j.desc}</p>}</div>)
+              ? cv.jobs.map(j => <div className="cv-paper-item" key={j.id}><strong>{j.title || "Puesto"}</strong><span>{[j.company, j.dates].filter(Boolean).join(" · ")}</span>{j.desc && <p>{j.desc}</p>}</div>)
               : <p className="placeholder">Añade tu experiencia para verla aquí.</p>}</div>
             <div className="cv-paper-section"><h4>FORMACIÓN</h4>{cv.education.length
-              ? cv.education.map((e, i) => <div className="cv-paper-item" key={i}><strong>{e.title || "Titulación"}</strong><span>{[e.center, e.dates].filter(Boolean).join(" · ")}</span></div>)
+              ? cv.education.map(e => <div className="cv-paper-item" key={e.id}><strong>{e.title || "Titulación"}</strong><span>{[e.center, e.dates].filter(Boolean).join(" · ")}</span></div>)
               : <p className="placeholder">Añade tu formación para verla aquí.</p>}</div>
             {!!list(cv.skills).length && <div className="cv-paper-section"><h4>HABILIDADES</h4><div className="cv-paper-chips">{list(cv.skills).map(s => <span key={s}>{s}</span>)}</div></div>}
             {!!list(cv.langs).length && <div className="cv-paper-section"><h4>IDIOMAS</h4><div className="cv-paper-chips">{list(cv.langs).map(s => <span key={s}>{s}</span>)}</div></div>}
