@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { AnimatePresence, LayoutGroup, motion } from "framer-motion";
-import { ArrowRight, LogOut, Trash2, X } from "lucide-react";
+import { ArrowRight, Eye, EyeOff, LogOut, Trash2, X } from "lucide-react";
 import type { Session } from "@supabase/supabase-js";
 import { Button } from "@/components/ui/button";
 import { HeroTitle, Reveal } from "@/components/EditorialEffects";
@@ -143,6 +143,7 @@ const monthKey = (d: Date) => new Intl.DateTimeFormat("en-CA", { timeZone: ZONE,
 const TABS = [
   { id: "citas", label: "Citas" }, { id: "tareas", label: "Tareas" },
   { id: "recordatorios", label: "Recordatorios" }, { id: "horario", label: "Horario" },
+  { id: "comentarios", label: "Comentarios" },
 ] as const;
 type Tab = typeof TABS[number]["id"];
 
@@ -157,6 +158,14 @@ function Dashboard({ email }: { email: string }) {
     setBookings(data as Booking[]);
   }, [toast]);
   useEffect(() => { loadBookings(); }, [loadBookings]);
+
+  // Comentarios que esperan tu aprobación (para el número de la pestaña)
+  const [pendingComments, setPendingComments] = useState(0);
+  const loadPendingComments = useCallback(async () => {
+    const { count } = await supabase.from("comments").select("id", { count: "exact", head: true }).eq("approved", false);
+    setPendingComments(count ?? 0);
+  }, []);
+  useEffect(() => { loadPendingComments(); }, [loadPendingComments]);
 
   const now = Date.now();
   const active = bookings.filter(b => b.status !== "cancelada");
@@ -178,7 +187,7 @@ function Dashboard({ email }: { email: string }) {
 
     <LayoutGroup id="admin-tabs"><div className="tab-bar" role="tablist" aria-label="Secciones del panel" onKeyDown={onTabListKeyDown}>
       {TABS.map(t => <button key={t.id} id={`pestana-${t.id}`} role="tab" aria-selected={tab === t.id} aria-controls="panel-pestana" tabIndex={tab === t.id ? 0 : -1} onClick={() => setTab(t.id)}>
-        {t.label}{t.id === "citas" && pending > 0 && <span className="count-badge">{pending}</span>}
+        {t.label}{t.id === "citas" && pending > 0 && <span className="count-badge">{pending}</span>}{t.id === "comentarios" && pendingComments > 0 && <span className="count-badge">{pendingComments}</span>}
         {tab === t.id && <motion.span layoutId="admin-tab" className="tab-indicator" transition={{ type: "spring", stiffness: 400, damping: 36 }} />}
       </button>)}
     </div></LayoutGroup>
@@ -189,6 +198,7 @@ function Dashboard({ email }: { email: string }) {
         {tab === "tareas" && <TasksTab />}
         {tab === "recordatorios" && <RemindersTab />}
         {tab === "horario" && <ScheduleTab />}
+        {tab === "comentarios" && <CommentsTab onChange={loadPendingComments} />}
       </motion.div>
     </AnimatePresence>
   </div></section>;
@@ -262,6 +272,64 @@ function BookingCard({ b, onPatch, onRemove }: { b: Booking; onPatch: (b: Bookin
       <button type="button" className="icon-button" aria-label={`Borrar la cita de ${b.name}`} onClick={() => onRemove(b)}><Trash2 /></button>
     </div>
   </motion.article>;
+}
+
+/* ---------- Comentarios: aprobar, ocultar o borrar ---------- */
+type AdminComment = { id: number; name: string; message: string; created_at: string; approved: boolean };
+const fmtComment = new Intl.DateTimeFormat("es-ES", { timeZone: ZONE, day: "numeric", month: "long", year: "numeric", hour: "2-digit", minute: "2-digit" });
+
+function CommentsTab({ onChange }: { onChange: () => void }) {
+  const toast = useToast();
+  const [comments, setComments] = useState<AdminComment[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [show, setShow] = useState<"pending" | "approved" | "all">("pending");
+
+  useEffect(() => {
+    supabase.from("comments").select("id, name, message, created_at, approved").order("created_at", { ascending: false }).then(({ data, error }) => {
+      setLoading(false);
+      if (error) toast("No se han podido cargar los comentarios.", true); else setComments(data as AdminComment[]);
+    });
+  }, [toast]);
+
+  const setApproved = async (c: AdminComment, approved: boolean) => {
+    const { error } = await supabase.from("comments").update({ approved }).eq("id", c.id);
+    if (error) return toast("No se ha podido guardar.", true);
+    setComments(list => list.map(x => x.id === c.id ? { ...x, approved } : x));
+    onChange();
+    toast(approved ? "Comentario publicado." : "Comentario oculto.");
+  };
+
+  const remove = async (c: AdminComment) => {
+    if (!confirm(`¿Borrar el comentario de ${c.name}? No se puede deshacer.`)) return;
+    const { error } = await supabase.from("comments").delete().eq("id", c.id);
+    if (error) return toast("No se ha podido borrar.", true);
+    setComments(list => list.filter(x => x.id !== c.id));
+    onChange();
+    toast("Comentario borrado.");
+  };
+
+  const pendingCount = comments.filter(c => !c.approved).length;
+  const visible = comments.filter(c => show === "all" || (show === "pending" ? !c.approved : c.approved));
+
+  return <div style={{ paddingTop: 30, maxWidth: 860 }}>
+    <p className="form-note" style={{ marginBottom: 20 }}>Los comentarios nuevos no salen en la web hasta que los publicas.</p>
+    <div className="filter-row">
+      {([["pending", `Por revisar (${pendingCount})`], ["approved", "Publicados"], ["all", "Todos"]] as const).map(([id, label]) => <button key={id} className="chip" aria-pressed={show === id} onClick={() => setShow(id)}>{label}</button>)}
+    </div>
+    {loading ? <p className="status-text">Cargando comentarios…</p>
+      : visible.length === 0 ? <div className="empty-state"><strong>{show === "pending" ? "Nada por revisar." : "Sin comentarios."}</strong><p>{show === "pending" ? "Cuando alguien escriba, aparecerá aquí." : "No hay comentarios en este filtro."}</p></div>
+        : <ul className="comment-list"><AnimatePresence initial={false}>{visible.map(c => <motion.li key={c.id} layout initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, x: 30 }}>
+          <header><strong>{c.name}</strong><time dateTime={c.created_at}>{fmtComment.format(new Date(c.created_at)).toUpperCase()}</time></header>
+          <p>{c.message}</p>
+          <div className="filter-row" style={{ margin: "12px 0 0" }}>
+            <span className="status-tag"><i style={{ background: c.approved ? STATUSES[1].color : STATUSES[0].color }} />{c.approved ? "Publicado" : "Por revisar"}</span>
+            {c.approved
+              ? <Button variant="outlineLuxury" onClick={() => setApproved(c, false)}><EyeOff /> Ocultar</Button>
+              : <Button variant="luxury" onClick={() => setApproved(c, true)}><Eye /> Publicar</Button>}
+            <button type="button" className="icon-button" aria-label={`Borrar el comentario de ${c.name}`} onClick={() => remove(c)}><Trash2 /></button>
+          </div>
+        </motion.li>)}</AnimatePresence></ul>}
+  </div>;
 }
 
 /* ---------- Tareas ---------- */

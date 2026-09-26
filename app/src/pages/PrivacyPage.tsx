@@ -23,7 +23,7 @@ export default function PrivacyPage() {
         <h2>Qué datos se recogen y para qué</h2>
         <ul>
           <li><strong>Reservar una reunión:</strong> nombre, email y, si quieres, teléfono y tema. Solo sirven para organizar la reunión y ponerme en contacto contigo.</li>
-          <li><strong>Dejar un comentario:</strong> el nombre y el mensaje que escribas. Se publican en esta web, así que no pongas datos que no quieras que se vean.</li>
+          <li><strong>Dejar un comentario:</strong> el nombre y el mensaje que escribas. Se publican en esta web después de que los revise, así que no pongas datos que no quieras que se vean.</li>
           <li><strong>Lista de tareas, creador de CV y calendario:</strong> lo que escribes se guarda solo en tu propio navegador. No me llega a mí ni a nadie. La foto del CV ni siquiera se guarda.</li>
         </ul>
         <p>La base legal es tu consentimiento, que das al marcar la casilla o al enviar el comentario. Puedes retirarlo cuando quieras.</p>

@@ -179,13 +179,13 @@ function Guestbook() {
     event.preventDefault();
     const n = name.trim(), msg = message.trim();
     if (!n || !msg) return toast("Escribe tu nombre y tu comentario.", true);
-    if (trap) { setName(""); setMessage(""); return toast("¡Gracias por tu nota!"); }
+    if (trap) { setName(""); setMessage(""); return toast("¡Gracias! Tu comentario se publicará cuando Mario lo revise."); }
     setSending(true);
     const { error } = await publicClient.from("comments").insert({ name: n.slice(0, 50), message: msg.slice(0, 500) });
     setSending(false);
     if (error) return toast(error.message.includes("too_many") ? "Se han escrito muchos comentarios seguidos. Prueba dentro de unos minutos." : "No se ha podido publicar. Inténtalo de nuevo.", true);
     setName(""); setMessage("");
-    toast("¡Gracias por tu nota!");
+    toast("¡Gracias! Tu comentario se publicará cuando Mario lo revise.");
     load();
   };
 
@@ -194,7 +194,7 @@ function Guestbook() {
       <div className="form-row"><label htmlFor="gb-name">Tu nombre</label><input id="gb-name" value={name} onChange={e => setName(e.target.value)} maxLength={50} placeholder="¿Cómo te llamas?" /></div>
       <div className="form-row"><label htmlFor="gb-msg">Comentario</label><textarea id="gb-msg" rows={5} value={message} onChange={e => setMessage(e.target.value)} maxLength={500} placeholder="Escribe algo…" /></div>
       <div className="hp-field" aria-hidden="true"><label htmlFor="gb-website">No rellenes este campo</label><input id="gb-website" tabIndex={-1} autoComplete="off" value={trap} onChange={e => setTrap(e.target.value)} /></div>
-      <p className="form-note">Tu nombre y tu comentario se publicarán en esta web. Más información en la <Link to="/privacidad">política de privacidad</Link>.</p>
+      <p className="form-note">Tu nombre y tu comentario se publicarán en esta web cuando Mario los revise. Más información en la <Link to="/privacidad">política de privacidad</Link>.</p>
       <div className="form-actions"><small className="tasks-count" style={{ color: "var(--muted-foreground)" }}>{message.length}/500</small><Button type="submit" variant="luxury" disabled={sending}>{sending ? "Publicando…" : "Publicar comentario"} {!sending && <ArrowRight />}</Button></div>
     </form></Reveal>
     <div>
