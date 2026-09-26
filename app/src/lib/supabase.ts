@@ -26,5 +26,5 @@ export async function isAdminSession() {
   return !error && ok === true;
 }
 
-/** Ruta pública de un archivo de /public (la web vive en /MarioIglesias/). */
-export const asset = (file: string) => `${import.meta.env.BASE_URL}${file}`;
+/** Funciones públicas de reserva en la base de datos de Mario. */
+export const bookingClient = publicClient;

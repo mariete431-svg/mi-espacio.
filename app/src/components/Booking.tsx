@@ -1,18 +1,22 @@
 import { useEffect, useMemo, useState } from "react";
+import { Link } from "react-router-dom";
 import { AnimatePresence, motion } from "framer-motion";
 import { ArrowLeft, ArrowRight, ChevronLeft, ChevronRight, Download } from "lucide-react";
 import { z } from "zod";
 import { Button } from "@/components/ui/button";
 import { useMotionPreference } from "@/components/EditorialEffects";
-import { bookingClient, dayKey, downloadCalendarEvent, formatDay, formatTime } from "@/lib/appointments";
+import { dayKey, downloadCalendarEvent, formatDay, formatTime } from "@/lib/appointments";
+import { bookingClient } from "@/lib/supabase";
 
 const steps = ["Día", "Hora", "Tus datos", "Confirmación"];
 const weekdays = ["L", "M", "X", "J", "V", "S", "D"];
+// Los mismos límites que la base de datos, para que nunca rechace algo que aquí parecía válido
+const LIMITS = { name: 80, email: 120, phone: 30, topic: 500 };
 const bookingSchema = z.object({
-  name: z.string().trim().min(1, "Escribe tu nombre.").max(100, "El nombre es demasiado largo."),
-  email: z.string().trim().email("Escribe un correo válido.").max(255, "El correo es demasiado largo."),
-  phone: z.string().trim().max(30, "El teléfono es demasiado largo."),
-  topic: z.string().trim().max(1000, "El mensaje es demasiado largo."),
+  name: z.string().trim().min(2, "Escribe tu nombre (mínimo 2 letras).").max(LIMITS.name, `El nombre no puede pasar de ${LIMITS.name} caracteres.`),
+  email: z.string().trim().email("Escribe un correo válido.").max(LIMITS.email, `El correo no puede pasar de ${LIMITS.email} caracteres.`),
+  phone: z.string().trim().max(LIMITS.phone, `El teléfono no puede pasar de ${LIMITS.phone} caracteres.`),
+  topic: z.string().trim().max(LIMITS.topic, `El mensaje no puede pasar de ${LIMITS.topic} caracteres.`),
   consent: z.literal(true, { errorMap: () => ({ message: "Necesitamos tu consentimiento para reservar." }) }),
 });
 type Field = "name" | "email" | "phone" | "topic" | "consent";
@@ -33,6 +37,8 @@ export function Booking({ compact = false }: { compact?: boolean }) {
   const [slotsError, setSlotsError] = useState("");
   const [selectedSlot, setSelectedSlot] = useState("");
   const [form, setForm] = useState<Form>({ name: "", email: "", phone: "", topic: "", consent: false });
+  // Campo trampa: las personas no lo ven; los robots que rellenan todo, sí
+  const [trap, setTrap] = useState("");
   const [errors, setErrors] = useState<Partial<Record<Field, string>>>({});
   const [submitError, setSubmitError] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -100,6 +106,7 @@ export function Booking({ compact = false }: { compact?: boolean }) {
       setErrors(next);
       return;
     }
+    if (trap) { setConfirmedEmail(result.data.email); setStep(3); return; }
     setSubmitting(true);
     setSubmitError("");
     const { error } = await bookingClient.rpc("book_appointment", {
@@ -118,7 +125,11 @@ export function Booking({ compact = false }: { compact?: boolean }) {
         setSubmitError("Esa hora acaba de ocuparse. Elige otra disponible.");
       } else if (error.message.includes("too_many")) {
         setSubmitError("Ya hay varias reuniones pendientes con este correo. Escríbele a Mario para organizar otra.");
-      } else setSubmitError("No hemos podido completar la reserva. Inténtalo de nuevo.");
+      } else if (error.message.includes("busy")) {
+        setSubmitError("Ahora mismo hay muchas reservas. Inténtalo dentro de un rato o escribe a mariete431@icloud.com.");
+      } else if (error.message.includes("invalid_input") || error.code === "23514") {
+        setSubmitError("Revisa tus datos: el nombre debe tener entre 2 y 80 caracteres y el correo debe ser válido.");
+      } else setSubmitError("No hemos podido completar la reserva. Revisa tu conexión e inténtalo de nuevo.");
       return;
     }
     setConfirmedEmail(result.data.email);
@@ -127,7 +138,7 @@ export function Booking({ compact = false }: { compact?: boolean }) {
 
   const reset = () => {
     setSelectedDay(""); setSelectedSlot(""); setConfirmedEmail(""); setErrors({}); setSubmitError("");
-    setForm({ name: "", email: "", phone: "", topic: "", consent: false });
+    setForm({ name: "", email: "", phone: "", topic: "", consent: false }); setTrap("");
     setMonthOffset(0); setRetryDays(value => value + 1); setStep(0);
   };
 
@@ -155,8 +166,8 @@ export function Booking({ compact = false }: { compact?: boolean }) {
             {step === 0 && <>
               <span className="eyebrow">PASO 01 / 04</span><h3>Elige un día.</h3>
               <div className="calendar-heading"><strong>{monthLabel}</strong><div><Button variant="calendarNav" size="icon" aria-label="Mes anterior" disabled={monthOffset === 0} onClick={() => setMonthOffset(value => value - 1)}><ChevronLeft /></Button><Button variant="calendarNav" size="icon" aria-label="Mes siguiente" disabled={monthOffset === 2} onClick={() => setMonthOffset(value => value + 1)}><ChevronRight /></Button></div></div>
-              <div className="calendar-grid" role="grid" aria-label={`Disponibilidad de ${monthLabel}`}>
-                {weekdays.map(day => <span className="weekday" key={day}>{day}</span>)}
+              <div className="calendar-grid" role="group" aria-label={`Disponibilidad de ${monthLabel}`}>
+                {weekdays.map(day => <span className="weekday" key={day} aria-hidden="true">{day}</span>)}
                 {cells.map((date, index) => date ? <Button key={date} variant="calendarDay" className={`${date === today ? "today" : ""} ${selectedDay === date ? "selected" : ""} ${daysLoading ? "loading-day" : ""}`} disabled={daysLoading || !available.includes(date) || date < today} onClick={() => { setSelectedDay(date); setSelectedSlot(""); setStep(1); }} aria-label={`${formatDay(date)}${available.includes(date) ? ", disponible" : ", no disponible"}`} aria-pressed={selectedDay === date}>{selectedDay === date && <motion.span layoutId="selected-calendar-day" className="selected-day-pill" transition={{ type: "spring", stiffness: 300, damping: 30 }} />}<span className="day-number">{Number(date.slice(-2))}</span>{!daysLoading && available.includes(date) && <i />}</Button> : <span key={`empty-${index}`} />)}
               </div>
               {daysLoading && <p className="status-text">Consultando disponibilidad…</p>}
@@ -178,11 +189,12 @@ export function Booking({ compact = false }: { compact?: boolean }) {
               <span className="eyebrow">PASO 03 / 04</span><h3>Tus datos.</h3>
               <p className="step-subtitle">Solo lo necesario para ponernos en contacto.</p>
               <form className="booking-form" onSubmit={submit} noValidate>
-                <div className="form-row"><label htmlFor="booking-name">Nombre <span>*</span></label><input id="booking-name" autoComplete="name" maxLength={100} value={form.name} onChange={e => setField("name", e.target.value)} aria-invalid={!!errors.name} aria-describedby={errors.name ? "name-error" : undefined} placeholder="Tu nombre" />{errors.name && <small id="name-error" role="alert">{errors.name}</small>}</div>
-                <div className="form-row"><label htmlFor="booking-email">Email <span>*</span></label><input id="booking-email" type="email" autoComplete="email" maxLength={255} value={form.email} onChange={e => setField("email", e.target.value)} aria-invalid={!!errors.email} aria-describedby={errors.email ? "email-error" : undefined} placeholder="tu@email.com" />{errors.email && <small id="email-error" role="alert">{errors.email}</small>}</div>
-                <div className="form-row"><label htmlFor="booking-phone">Teléfono <span className="optional">Opcional</span></label><input id="booking-phone" type="tel" autoComplete="tel" maxLength={30} value={form.phone} onChange={e => setField("phone", e.target.value)} aria-invalid={!!errors.phone} placeholder="+34" />{errors.phone && <small role="alert">{errors.phone}</small>}</div>
-                <div className="form-row"><label htmlFor="booking-topic">¿De qué quieres hablar? <span className="optional">Opcional</span></label><textarea id="booking-topic" rows={3} maxLength={1000} value={form.topic} onChange={e => setField("topic", e.target.value)} aria-invalid={!!errors.topic} placeholder="Cuéntame brevemente…" />{errors.topic && <small role="alert">{errors.topic}</small>}</div>
-                <label className="consent-row"><input type="checkbox" checked={form.consent} onChange={e => setField("consent", e.target.checked)} aria-invalid={!!errors.consent} /><span>Acepto que Mario use estos datos solo para contactarme sobre esta reunión.</span></label>
+                <div className="form-row"><label htmlFor="booking-name">Nombre <span aria-hidden="true">*</span></label><input id="booking-name" autoComplete="name" maxLength={LIMITS.name} required aria-required="true" value={form.name} onChange={e => setField("name", e.target.value)} aria-invalid={!!errors.name} aria-describedby={errors.name ? "name-error" : undefined} placeholder="Tu nombre" />{errors.name && <small id="name-error" role="alert">{errors.name}</small>}</div>
+                <div className="form-row"><label htmlFor="booking-email">Email <span aria-hidden="true">*</span></label><input id="booking-email" type="email" autoComplete="email" maxLength={LIMITS.email} required aria-required="true" value={form.email} onChange={e => setField("email", e.target.value)} aria-invalid={!!errors.email} aria-describedby={errors.email ? "email-error" : undefined} placeholder="tu@email.com" />{errors.email && <small id="email-error" role="alert">{errors.email}</small>}</div>
+                <div className="form-row"><label htmlFor="booking-phone">Teléfono <span className="optional">Opcional</span></label><input id="booking-phone" type="tel" autoComplete="tel" maxLength={LIMITS.phone} value={form.phone} onChange={e => setField("phone", e.target.value)} aria-invalid={!!errors.phone} placeholder="+34" />{errors.phone && <small role="alert">{errors.phone}</small>}</div>
+                <div className="form-row"><label htmlFor="booking-topic">¿De qué quieres hablar? <span className="optional">Opcional · {form.topic.length}/{LIMITS.topic}</span></label><textarea id="booking-topic" rows={3} maxLength={LIMITS.topic} value={form.topic} onChange={e => setField("topic", e.target.value)} aria-invalid={!!errors.topic} placeholder="Cuéntame brevemente…" />{errors.topic && <small role="alert">{errors.topic}</small>}</div>
+                <div className="hp-field" aria-hidden="true"><label htmlFor="booking-website">No rellenes este campo</label><input id="booking-website" tabIndex={-1} autoComplete="off" value={trap} onChange={e => setTrap(e.target.value)} /></div>
+                <label className="consent-row"><input type="checkbox" checked={form.consent} onChange={e => setField("consent", e.target.checked)} aria-invalid={!!errors.consent} aria-required="true" /><span>Acepto que Mario use estos datos solo para contactarme sobre esta reunión, según la <Link to="/privacidad" target="_blank">política de privacidad</Link>.</span></label>
                 {errors.consent && <small className="form-error" role="alert">{errors.consent}</small>}
                 {submitError && <p className="form-error" role="alert">{submitError}</p>}
                 <div className="form-actions"><Button type="button" variant="text" onClick={() => setStep(1)}><ArrowLeft /> Volver a la hora</Button><Button type="submit" variant="luxury" disabled={submitting}>{submitting ? "Confirmando…" : "Confirmar reunión"} {!submitting && <ArrowRight />}</Button></div>

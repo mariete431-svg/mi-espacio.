@@ -38,7 +38,7 @@ export function SiteHeader() {
 
   return <>
     <header className="site-header"><div className="header-inner">
-      <NavItem to="/#inicio" className="brand"><span aria-label="Mario Iglesias, volver al inicio">Mario Iglesias<span className="brand-dot">.</span></span></NavItem>
+      <NavItem to="/#inicio" className="brand"><span>Mario Iglesias<span className="brand-dot" aria-hidden="true">.</span></span></NavItem>
       <nav className="desktop-nav" aria-label="Navegación principal">{navigation.map(item => <NavItem key={item.label} to={item.to} className="nav-link">{item.label}</NavItem>)}</nav>
       <div className="header-actions">
         <NavItem to="/crear-cv" className="header-book header-book-light">Crear CV <ArrowUpRight size={15} strokeWidth={1.5} /></NavItem>
@@ -60,7 +60,10 @@ export function SiteHeader() {
 export function SiteFooter() {
   return <footer className="footer"><div className="section-wrap">
     <span>© 2026 Mario Iglesias · Adeje, Tenerife</span>
-    <Link to="/admin">Panel <ArrowUpRight size={13} /></Link>
+    <nav aria-label="Enlaces legales">
+      <Link to="/privacidad">Privacidad y aviso legal</Link>
+      <Link to="/admin">Panel <ArrowUpRight size={13} /></Link>
+    </nav>
   </div></footer>;
 }
 

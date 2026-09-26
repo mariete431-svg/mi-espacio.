@@ -3,6 +3,7 @@ import { Route, Routes, useLocation } from "react-router-dom";
 import { AnimatePresence, motion } from "framer-motion";
 import { CustomCursor, ScrollAtmosphere, useMotionPreference } from "@/components/EditorialEffects";
 import { SiteFooter, SiteHeader } from "@/components/SiteChrome";
+import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { ToastProvider } from "@/components/Toast";
 import Home from "@/pages/Home";
 
@@ -12,6 +13,7 @@ const TasksPage = lazy(() => import("@/pages/TasksPage"));
 const PanelPage = lazy(() => import("@/pages/PanelPage"));
 const BuilderPage = lazy(() => import("@/pages/BuilderPage"));
 const AdminPage = lazy(() => import("@/pages/AdminPage"));
+const PrivacyPage = lazy(() => import("@/pages/PrivacyPage"));
 const NotFound = lazy(() => import("@/pages/NotFound"));
 
 /** Tras cambiar de página: arriba del todo, o a la sección del enlace (#reservar…). */
@@ -45,6 +47,7 @@ export default function App() {
         exit={reduced ? {} : { opacity: 0, y: -10 }}
         transition={{ duration: .45, ease: [.22, 1, .36, 1] }}
       >
+        <ErrorBoundary key={location.pathname}>
         <Suspense fallback={<div style={{ minHeight: "100svh" }} />}>
         <Routes location={location}>
           <Route path="/" element={<Home />} />
@@ -53,9 +56,11 @@ export default function App() {
           <Route path="/panel" element={<PanelPage />} />
           <Route path="/crear-cv" element={<BuilderPage />} />
           <Route path="/admin" element={<AdminPage />} />
+          <Route path="/privacidad" element={<PrivacyPage />} />
           <Route path="*" element={<NotFound />} />
         </Routes>
         </Suspense>
+        </ErrorBoundary>
         <SiteFooter />
       </motion.div>
     </AnimatePresence>

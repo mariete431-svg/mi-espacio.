@@ -4,7 +4,7 @@ import { ArrowUpRight, Printer } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Magnetic, ProfileParallax, Reveal } from "@/components/EditorialEffects";
 import { PageHero, SectionHeading, usePageTitle } from "@/components/SiteChrome";
-import { asset } from "@/lib/supabase";
+import { asset } from "@/lib/asset";
 import { CV_PDF } from "@/pages/Home";
 
 const experience = [

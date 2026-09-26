@@ -1,8 +1,5 @@
-import { publicClient } from "@/lib/supabase";
-
-// Funciones públicas de reserva en la base de datos de Mario.
-export const bookingClient = publicClient;
-
+// Fechas y horas de las reservas (hora de Canarias).
+// No importa Supabase a propósito: así la portada se dibuja sin esperar a descargarlo.
 export const ZONE = "Atlantic/Canary";
 export const dayKey = (date: Date) => new Intl.DateTimeFormat("en-CA", {
   timeZone: ZONE, year: "numeric", month: "2-digit", day: "2-digit",

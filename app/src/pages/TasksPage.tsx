@@ -4,6 +4,7 @@ import { ArrowRight, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Reveal, useMotionPreference } from "@/components/EditorialEffects";
 import { PageHero, SectionHeading, usePageTitle } from "@/components/SiteChrome";
+import { newId, onTabListKeyDown, readStored, writeStored } from "@/lib/utils";
 
 // Misma clave y formato que la lista antigua, para no perder las tareas guardadas
 const STORAGE_KEY = "mario-tareas";
@@ -14,7 +15,8 @@ const filters: { id: Filter; label: string }[] = [
 ];
 
 function loadTasks(): Task[] {
-  try { return JSON.parse(localStorage.getItem(STORAGE_KEY) || "[]"); } catch { return []; }
+  const saved = readStored<Task[]>(STORAGE_KEY, []);
+  return Array.isArray(saved) ? saved : [];
 }
 
 export default function TasksPage() {
@@ -24,7 +26,7 @@ export default function TasksPage() {
   const [text, setText] = useState("");
   const [filter, setFilter] = useState<Filter>("all");
 
-  useEffect(() => { localStorage.setItem(STORAGE_KEY, JSON.stringify(tasks)); }, [tasks]);
+  useEffect(() => { writeStored(STORAGE_KEY, tasks); }, [tasks]);
 
   const pending = tasks.filter(t => !t.completed).length;
   const visible = useMemo(() => tasks.filter(t => filter === "all" || (filter === "done" ? t.completed : !t.completed)), [tasks, filter]);
@@ -33,7 +35,7 @@ export default function TasksPage() {
     event.preventDefault();
     const value = text.trim().slice(0, 200);
     if (!value) return;
-    setTasks(list => [...list, { id: Date.now().toString(), text: value, completed: false }]);
+    setTasks(list => [...list, { id: newId(), text: value, completed: false }]);
     setText("");
   };
 
@@ -56,11 +58,12 @@ export default function TasksPage() {
 
         <div className="tasks-head">
           <p className="tasks-count" aria-live="polite"><strong>{pending}</strong>{pending === 1 ? "pendiente" : "pendientes"} de {tasks.length}</p>
-          <LayoutGroup id="task-filters"><div className="tab-bar" role="tablist" aria-label="Filtrar tareas" style={{ borderBottom: 0 }}>
-            {filters.map(f => <button key={f.id} role="tab" aria-selected={filter === f.id} onClick={() => setFilter(f.id)}>{f.label}{filter === f.id && <motion.span layoutId="task-filter" className="tab-indicator" transition={{ type: "spring", stiffness: 400, damping: 36 }} />}</button>)}
+          <LayoutGroup id="task-filters"><div className="tab-bar" role="tablist" aria-label="Filtrar tareas" style={{ borderBottom: 0 }} onKeyDown={onTabListKeyDown}>
+            {filters.map(f => <button key={f.id} id={`filtro-${f.id}`} role="tab" aria-selected={filter === f.id} aria-controls="lista-tareas" tabIndex={filter === f.id ? 0 : -1} onClick={() => setFilter(f.id)}>{f.label}{filter === f.id && <motion.span layoutId="task-filter" className="tab-indicator" transition={{ type: "spring", stiffness: 400, damping: 36 }} />}</button>)}
           </div></LayoutGroup>
         </div>
 
+        <div id="lista-tareas" role="tabpanel" aria-labelledby={`filtro-${filter}`}>
         {visible.length === 0
           ? <motion.div className="empty-state" initial={{ opacity: 0 }} animate={{ opacity: 1 }}><strong>{tasks.length ? "Nada por aquí." : "Todo en orden."}</strong><p>{tasks.length ? "No hay tareas en este filtro." : "Todavía no hay tareas. Empieza por la primera."}</p></motion.div>
           : <ul className="task-list">
@@ -70,6 +73,7 @@ export default function TasksPage() {
               <button type="button" className="icon-button" aria-label={`Borrar "${task.text}"`} onClick={() => setTasks(list => list.filter(t => t.id !== task.id))}><X /></button>
             </motion.li>)}</AnimatePresence>
           </ul>}
+        </div>
 
         {tasks.some(t => t.completed) && <div className="tasks-foot"><Button variant="text" onClick={() => setTasks(list => list.filter(t => !t.completed))}>Borrar hechas <X /></Button></div>}
       </div></Reveal>

@@ -1,16 +1,18 @@
-import { useEffect, useState } from "react";
+import { lazy, Suspense, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { motion } from "framer-motion";
 import { ArrowDown, ArrowUpRight, CalendarDays, FileText, Plus, Minus } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Booking } from "@/components/Booking";
 import { CountUp, EditorialMarquee, Entrance, HeroTitle, Magnetic, ProfileParallax, ProjectPreview, Reveal } from "@/components/EditorialEffects";
 import { usePageTitle } from "@/components/SiteChrome";
 import { Testimonials } from "@/components/Testimonials";
-import { asset } from "@/lib/supabase";
-import { bookingClient, capitalize, dayKey } from "@/lib/appointments";
+import { asset, loadSupabase } from "@/lib/asset";
+import { capitalize, dayKey } from "@/lib/appointments";
 
-export const CV_PDF = "https://mariete431-svg.github.io/MarioIglesias/cv%202025.pdf";
+// El calendario de reservas solo se descarga al abrir su desplegable
+const Booking = lazy(() => import("@/components/Booking").then(m => ({ default: m.Booking })));
+
+export const CV_PDF = asset("cv%202025.pdf");
 
 const experience = [
   { year: "2025", role: "Inside LVMH Certificate", place: "Curso online", detail: "Operations & Supply Chain, Retail & Client Experience." },
@@ -40,9 +42,12 @@ function StartHere() {
   useEffect(() => {
     const now = new Date();
     const to = dayKey(new Date(now.getTime() + 45 * 86_400_000));
-    bookingClient.rpc("get_available_days", { p_from: dayKey(now), p_to: to }).then(({ data, error }) => {
-      setDays(!error && Array.isArray(data) ? data.slice(0, 3) : []);
-    });
+    let active = true;
+    loadSupabase()
+      .then(({ bookingClient }) => bookingClient.rpc("get_available_days", { p_from: dayKey(now), p_to: to }))
+      .then(({ data, error }) => { if (active) setDays(!error && Array.isArray(data) ? data.slice(0, 3) : []); })
+      .catch(() => { if (active) setDays([]); });
+    return () => { active = false; };
   }, []);
 
   // Cualquier enlace a #reservar (cabecera, botones, otras páginas) abre el calendario
@@ -76,21 +81,21 @@ function StartHere() {
           <span className="start-plus" aria-hidden="true"><Plus /></span>
         </button>
         <motion.div id="start-reservar" className="start-panel" initial={false} animate={{ height: open === "reservar" ? "auto" : 0, opacity: open === "reservar" ? 1 : 0 }} transition={{ duration: .55, ease: [.22, 1, .36, 1] }}>
-          {open === "reservar" && <div className="start-panel-inner"><Booking compact /></div>}
+          {open === "reservar" && <div className="start-panel-inner"><Suspense fallback={<p className="status-text">Abriendo el calendario…</p>}><Booking compact /></Suspense></div>}
         </motion.div>
       </div></Reveal>
 
       <Reveal delay={.06}><div className={`start-item ${open === "cv" ? "is-open" : ""}`}>
         <button type="button" className="start-toggle" aria-expanded={open === "cv"} aria-controls="start-cv" onClick={() => toggle("cv")} data-cursor={open === "cv" ? "Cerrar" : "Abrir"}>
           <span className="start-icon"><FileText strokeWidth={1.2} /></span>
-          <span className="start-text"><strong>Crea tu <em>currículum</em></strong><small>Herramienta gratuita · en directo · descarga en PDF</small></span>
+          <span className="start-text"><strong>Crea tu <em>currículum</em></strong><small>Herramienta gratuita · en directo · guárdalo en PDF</small></span>
           <span className="start-plus" aria-hidden="true"><Plus /></span>
         </button>
         <motion.div id="start-cv" className="start-panel" initial={false} animate={{ height: open === "cv" ? "auto" : 0, opacity: open === "cv" ? 1 : 0 }} transition={{ duration: .55, ease: [.22, 1, .36, 1] }}>
           <div className="start-panel-inner start-cv">
             <div className="feature-paper" aria-hidden="true"><span /><span /><span /><span /><span /></div>
             <div>
-              <p>Rellena tus datos y míralo tomar forma en directo. Cuando esté listo, descárgalo en PDF. Sin registrarte y sin enviar nada a ningún sitio.</p>
+              <p>Rellena tus datos y míralo tomar forma en directo. Cuando esté listo, guárdalo en PDF. Sin registrarte y sin enviar nada a ningún sitio.</p>
               <div className="hero-actions">
                 <Button variant="luxury" size="lg" asChild><Link to="/crear-cv" data-cursor="Crear">Empezar mi CV <ArrowUpRight /></Link></Button>
                 <Button variant="outlineLuxury" size="lg" asChild><Link to="/cv">Ver el CV de Mario <ArrowUpRight /></Link></Button>
@@ -112,8 +117,8 @@ export default function Home() {
       <section className="hero section-wrap" aria-labelledby="hero-title">
         <div className="hero-content"><Reveal immediate><p className="eyebrow hero-eyebrow"><span className="eyebrow-line" /> ADEJE, TENERIFE — 2026</p></Reveal>
           <HeroTitle />
-          <motion.p className="hero-subtitle" initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 1.05, duration: .7 }}>Atención al cliente, organización y desarrollo web.<br className="desktop-break" /> Detalle, discreción y trabajo bien hecho.</motion.p>
-          <motion.div className="hero-actions" initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 1.22, duration: .7 }}><Magnetic><Button variant="luxury" size="lg" asChild><a href="#reservar" data-cursor="Reservar">Reservar una reunión <ArrowUpRight /></a></Button></Magnetic><Magnetic><Button variant="outlineLuxury" size="lg" asChild><Link to="/crear-cv" data-cursor="Crear">Crear mi CV gratis <ArrowUpRight /></Link></Button></Magnetic></motion.div>
+          <motion.p className="hero-subtitle" initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: .45, duration: .6 }}>Atención al cliente, organización y desarrollo web.<br className="desktop-break" /> Detalle, discreción y trabajo bien hecho.</motion.p>
+          <motion.div className="hero-actions" initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: .55, duration: .6 }}><Magnetic><Button variant="luxury" size="lg" asChild><a href="#reservar" data-cursor="Reservar">Reservar una reunión <ArrowUpRight /></a></Button></Magnetic><Magnetic><Button variant="outlineLuxury" size="lg" asChild><Link to="/crear-cv" data-cursor="Crear">Crear mi CV gratis <ArrowUpRight /></Link></Button></Magnetic></motion.div>
         </div>
         <div className="hero-bottom"><span>MARIO IGLESIAS · 2026</span><a href="#servicios" aria-label="Bajar a los servicios">DESLIZA PARA DESCUBRIR <ArrowDown size={15} strokeWidth={1.5} /></a></div>
       </section>
